@@ -1,0 +1,55 @@
+---
+- hosts: localhost
+  name: Create K8s Deployment on Hetzner Cloud
+  vars:
+    terraform_dir: ./infrastructure
+  tasks:
+    - name: Create infrastructure on Hetzner Cloud
+      terraform:
+        variables:
+          master_nodes: 1
+          worker_nodes: 2
+        project_path: "{{ terraform_dir }}"
+        state: present
+      register: outputs
+    - name: Add master vm ips to groups
+      add_host:
+        name: "{{ item }}"
+        groups: 
+          - all
+          - master
+        ansible_user: root
+      loop: "{{ outputs.outputs.master_ips.value }}"
+
+    - name: Add worker vm ips to "all" host group
+      add_host:
+        name: "{{ item }}"
+        groups: 
+          - all
+          - worker
+        ansible_user: root
+      loop: "{{ outputs.outputs.worker_ips.value }}"
+- hosts: all
+  name: Install k8s on instances
+  gather_facts: true
+  vars_files:
+    - variables.yaml
+  roles:
+    - role: common
+      vars:
+        KUBERNETES_VERSION: 1.24.2-00
+- hosts: master
+  name: Install master
+  tasks:
+    - name: Install apache2
+      apt:
+        name: apache2
+        state: present
+
+- hosts: worker
+  name: Install worker
+  tasks:
+    - name: Install nginx
+      apt:
+        name: nginx
+        state: present
